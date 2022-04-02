@@ -1,0 +1,12 @@
+.DS_Store
+/lufa
+.vscode
+*.eep
+*.elf
+*.hex
+*.lss
+*.map
+*.sym
+*.bin
+venv
+obj
