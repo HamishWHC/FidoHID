@@ -36,6 +36,8 @@
 
 #include "FidoHID.h"
 
+int MSTillPoll = 5;
+
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
@@ -48,7 +50,11 @@ int main(void)
 
 	for (;;)
 	{
-		HID_Task();
+		if (MSTillPoll == 0)
+		{
+			HID_Task();
+			MSTillPoll = 5;
+		}
 		USB_USBTask();
 	}
 }
@@ -88,7 +94,7 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	ConfigSuccess &= Endpoint_ConfigureEndpoint(FIDO_OUT_EPADDR, EP_TYPE_INTERRUPT, FIDO_EPSIZE, 1);
 
 	// Enables EVENT_USB_Device_StartOfFrame
-	// USB_Device_EnableSOFEvents();
+	USB_Device_EnableSOFEvents();
 
 	LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
 }
@@ -98,51 +104,52 @@ void EVENT_USB_Device_ControlRequest(void)
 {
 	// CTAP2HID has no traffic on control requests. May have to implement anyway to satisfy OS, but hopefully can be avoided.
 	/* Handle HID Class specific requests */
-	switch (USB_ControlRequest.bRequest)
-	{
-	case HID_REQ_GetReport:
-		if (USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_CLASS | REQREC_INTERFACE))
-		{
-			uint8_t GenericData[FIDO_REPORT_SIZE];
-			CreateGenericHIDReport(GenericData);
+	// switch (USB_ControlRequest.bRequest)
+	// {
+	// case HID_REQ_GetReport:
+	// 	if (USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_CLASS | REQREC_INTERFACE))
+	// 	{
+	// 		uint8_t GenericData[FIDO_REPORT_SIZE];
+	// 		CreateGenericHIDReport(GenericData);
 
-			Endpoint_ClearSETUP();
+	// 		Endpoint_ClearSETUP();
 
-			/* Write the report data to the control endpoint */
-			Endpoint_Write_Control_Stream_LE(&GenericData, sizeof(GenericData));
-			Endpoint_ClearOUT();
-		}
+	// 		/* Write the report data to the control endpoint */
+	// 		Endpoint_Write_Control_Stream_LE(&GenericData, sizeof(GenericData));
+	// 		Endpoint_ClearOUT();
+	// 	}
 
-		break;
-	case HID_REQ_SetReport:
-		if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
-		{
-			uint8_t GenericData[FIDO_REPORT_SIZE];
+	// 	break;
+	// case HID_REQ_SetReport:
+	// 	if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
+	// 	{
+	// 		uint8_t GenericData[FIDO_REPORT_SIZE];
 
-			Endpoint_ClearSETUP();
+	// 		Endpoint_ClearSETUP();
 
-			/* Read the report data from the control endpoint */
-			Endpoint_Read_Control_Stream_LE(&GenericData, sizeof(GenericData));
-			Endpoint_ClearIN();
+	// 		/* Read the report data from the control endpoint */
+	// 		Endpoint_Read_Control_Stream_LE(&GenericData, sizeof(GenericData));
+	// 		Endpoint_ClearIN();
 
-			ProcessGenericHIDReport(GenericData);
-		}
+	// 		ProcessGenericHIDReport(GenericData);
+	// 	}
 
-		break;
-	}
+	// 	break;
+	// }
 }
 
 /** Event handler for the USB device Start Of Frame event. */
 void EVENT_USB_Device_StartOfFrame(void)
 {
 	// This event triggers once every millisecond. This allows us to implement polling intervals!
+	MSTillPoll--;
 }
 
 /** Function to process the last received report from the host.
  *
  *  \param[in] DataArray  Pointer to a buffer where the last received report has been stored
  */
-void ProcessGenericHIDReport(uint8_t *DataArray)
+void ProcessGenericHIDReport(uint8_t DataArray[FIDO_REPORT_SIZE])
 {
 	/*
 		This is where you need to process reports sent from the host to the device. This
@@ -171,7 +178,7 @@ void ProcessGenericHIDReport(uint8_t *DataArray)
  *
  *  \param[out] DataArray  Pointer to a buffer where the next report data should be stored
  */
-void CreateGenericHIDReport(uint8_t *DataArray)
+void CreateGenericHIDReport(uint8_t DataArray[FIDO_REPORT_SIZE])
 {
 	/*
 		This is where you need to create reports to be sent to the host from the device. This
@@ -179,12 +186,10 @@ void CreateGenericHIDReport(uint8_t *DataArray)
 		an array to hold the report to the host.
 	*/
 
-	uint8_t CurrLEDMask = LEDs_GetLEDs();
-
-	DataArray[0] = ((CurrLEDMask & LEDS_LED1) ? 1 : 0);
-	DataArray[1] = ((CurrLEDMask & LEDS_LED2) ? 1 : 0);
-	DataArray[2] = ((CurrLEDMask & LEDS_LED3) ? 1 : 0);
-	DataArray[3] = ((CurrLEDMask & LEDS_LED4) ? 1 : 0);
+	for (uint8_t i = 0; i < 64; i++)
+	{
+		DataArray[i] = i;
+	}
 }
 
 void HID_Task(void)

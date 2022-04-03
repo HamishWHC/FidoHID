@@ -81,7 +81,7 @@ enum StringDescriptors_t
 
 /* Macros: */
 /** Endpoint address of the Generic HID reporting IN endpoint. */
-#define FIDO_OUT_EPADDR (ENDPOINT_DIR_OUT | 1)
+#define FIDO_OUT_EPADDR (ENDPOINT_DIR_OUT | 2)
 #define FIDO_IN_EPADDR (ENDPOINT_DIR_IN | 1)
 
 /** Size in bytes of the Generic HID reporting endpoint. */

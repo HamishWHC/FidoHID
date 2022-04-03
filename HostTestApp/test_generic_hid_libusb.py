@@ -48,13 +48,12 @@ def send_led_pattern(device, led1, led2, led3, led4):
     # Report data for the demo is LED on/off data
     report_data = [led1, led2, led3, led4]
 
+    endpoint = device[0][(0, 0)][1]
     # Send the generated report to the device
-    number_of_bytes_written = device.ctrl_transfer(  # Set Report control request
-        0b00100001,  # bmRequestType (constant for this control request)
-        0x09,        # bmRequest (constant for this control request)
-        0,           # wValue (MSB is report type, LSB is report number)
-        0,           # wIndex (interface number)
-        report_data  # report data to be sent
+    number_of_bytes_written = device.write(
+        endpoint.bEndpointAddress,
+        report_data,  # report data to be sent
+        100
     )
     assert number_of_bytes_written == len(report_data)
 
@@ -86,7 +85,7 @@ def main():
                          (p >> 0) & 1)
 
         # Receive and print the current LED pattern
-        led_pattern = receive_led_pattern(hid_device)[0:4]
+        led_pattern = receive_led_pattern(hid_device)
         print("Received LED Pattern: {0}".format(led_pattern))
 
         # Compute next LED pattern in sequence
