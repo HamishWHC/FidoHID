@@ -43,6 +43,7 @@
 #include <avr/interrupt.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "Descriptors.h"
 #include "Config/AppConfig.h"
@@ -75,6 +76,6 @@ void EVENT_USB_Device_ControlRequest(void);
 void EVENT_USB_Device_StartOfFrame(void);
 
 void ProcessGenericHIDReport(uint8_t *DataArray);
-void CreateGenericHIDReport(uint8_t *DataArray);
+void CreateGenericHIDReport(uint8_t *DataArray, uint8_t mul);
 
 #endif

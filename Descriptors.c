@@ -45,7 +45,7 @@
  */
 const USB_Descriptor_HIDReport_Datatype_t PROGMEM FidoReport[] =
 	{
-		HID_RI_USAGE_PAGE(16, 0xFFD0), // FIDO Alliance Usage Page
+		HID_RI_USAGE_PAGE(16, 0xF1D0), // FIDO Alliance Usage Page
 		HID_RI_USAGE(8, 0x01),		   // CTAPHID Usage
 		HID_RI_COLLECTION(8, 0x01),
 		HID_RI_USAGE(8, 0x20), // IN Usage

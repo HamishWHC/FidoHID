@@ -18,13 +18,14 @@ F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
 TARGET       = FidoHID
-SRC          = $(TARGET).c Descriptors.c $(LUFA_SRC_USB)
+SRC          = $(TARGET).c Descriptors.c ctap2hid_packet.c ctap2hid_message.c $(LUFA_SRC_USB)
 LUFA_PATH    = LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS     =
 
 AVRDUDE_PROGRAMMER = avr109
-AVRDUDE_PORT = /dev/tty.usbmodem31101
+AVRDUDE_PORT = /dev/tty.usbmodem21301
+# AVRDUDE_PORT = /dev/tty.usbmodem31101
 
 # Default target
 all:

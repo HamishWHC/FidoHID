@@ -41,30 +41,36 @@ def get_and_init_hid_device():
     except usb.core.USBError as exception:
         sys.exit("Could not set configuration: %s" % str(exception))
 
+    # device.reset()
+
     return device
 
 
-def send_led_pattern(device, led1, led2, led3, led4):
+def send_report(device, nonce):
+    data = list(range(64))
     # Report data for the demo is LED on/off data
-    report_data = [led1, led2, led3, led4]
+    report_data = [0xff, 0xff, 0xff, 0xff,
+                   0x81, 0x00, 0x42, nonce] + data[:64-8] + [0xff, 0xff, 0xff, 0xff, 0x0, nonce] + data[64-8:]
 
-    endpoint = device[0][(0, 0)][1]
+    endpoint = usb.util.find_descriptor(
+        device[0][(0, 0)],
+        # match the first OUT endpoint
+        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT)
+
     # Send the generated report to the device
-    number_of_bytes_written = device.write(
-        endpoint.bEndpointAddress,
-        report_data,  # report data to be sent
-        100
-    )
-    assert number_of_bytes_written == len(report_data)
-
-    print("Sent LED Pattern: {0}".format(report_data))
+    for i in range(0, len(report_data), 64):
+        print(f"writing: {report_data[i:i+64]}")
+        device.write(
+            endpoint.bEndpointAddress,
+            report_data[i:i+64])
 
 
-def receive_led_pattern(hid_device):
+def receive_report(hid_device):
     endpoint = hid_device[0][(0, 0)][0]
-    report_data = hid_device.read(
-        endpoint.bEndpointAddress, endpoint.wMaxPacketSize)
-    return list(report_data)
+    for _ in range(2):
+        report_data = hid_device.read(
+            endpoint.bEndpointAddress, endpoint.wMaxPacketSize)
+        print(f"recevied: {list(report_data)}")
 
 
 def main():
@@ -76,23 +82,18 @@ def main():
            usb.util.get_string(hid_device, hid_device.iManufacturer)))
 
     p = 0
-    while (True):
-        # Convert the current pattern index to a bit-mask and send
-        send_led_pattern(hid_device,
-                         (p >> 3) & 1,
-                         (p >> 2) & 1,
-                         (p >> 1) & 1,
-                         (p >> 0) & 1)
+    try:
+        while (True):
+            send_report(hid_device, p)
 
-        # Receive and print the current LED pattern
-        led_pattern = receive_led_pattern(hid_device)
-        print("Received LED Pattern: {0}".format(led_pattern))
+            receive_report(hid_device)
 
-        # Compute next LED pattern in sequence
-        p = (p + 1) % 16
+            p += 1
 
-        # Delay a bit for visual effect
-        sleep(.2)
+            sleep(.2)
+    except KeyboardInterrupt:
+        usb.util.dispose_resources(hid_device)
+        hid_device.attach_kernel_driver(0)
 
 
 if __name__ == '__main__':

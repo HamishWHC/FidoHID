@@ -1,0 +1,18 @@
+#ifndef _CTAPHID_H_
+#define _CTAPHID_H_
+
+// CTAPHID Capabilities
+#define CTAPHID_CAPABILITY_WINK 0x1
+#define CTAPHID_CAPABILITY_CBOR 0x4
+#define CTAPHID_CAPABILITY_NMSG 0x8
+
+// CTAPHID Protocol Version (CTAP2)
+#define CTAPHID_PROTOCOL_VERSION 2
+
+// CTAPHID Commands
+#define CTAPHID_PING 0x1
+#define CTAPHID_INIT 0x6
+#define CTAPHID_WINK 0x8
+#define CTAPHID_ERROR 0x3f
+
+#endif

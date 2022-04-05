@@ -10,3 +10,5 @@
 *.bin
 venv
 obj
+/test
+/test.c

@@ -35,8 +35,17 @@
  */
 
 #include "FidoHID.h"
+#include "ctap2hid_packet.h"
+#include "ctap2hid_message.h"
+#include "ctaphid.h"
 
-int MSTillPoll = 5;
+typedef struct
+{
+	uint32_t channel_id;
+
+} fido_state_t;
+
+int ms_till_poll = 5;
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
@@ -50,10 +59,10 @@ int main(void)
 
 	for (;;)
 	{
-		if (MSTillPoll == 0)
+		if (ms_till_poll == 0)
 		{
 			HID_Task();
-			MSTillPoll = 5;
+			ms_till_poll = 5;
 		}
 		USB_USBTask();
 	}
@@ -103,93 +112,111 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 void EVENT_USB_Device_ControlRequest(void)
 {
 	// CTAP2HID has no traffic on control requests. May have to implement anyway to satisfy OS, but hopefully can be avoided.
-	/* Handle HID Class specific requests */
-	// switch (USB_ControlRequest.bRequest)
-	// {
-	// case HID_REQ_GetReport:
-	// 	if (USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_CLASS | REQREC_INTERFACE))
-	// 	{
-	// 		uint8_t GenericData[FIDO_REPORT_SIZE];
-	// 		CreateGenericHIDReport(GenericData);
-
-	// 		Endpoint_ClearSETUP();
-
-	// 		/* Write the report data to the control endpoint */
-	// 		Endpoint_Write_Control_Stream_LE(&GenericData, sizeof(GenericData));
-	// 		Endpoint_ClearOUT();
-	// 	}
-
-	// 	break;
-	// case HID_REQ_SetReport:
-	// 	if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
-	// 	{
-	// 		uint8_t GenericData[FIDO_REPORT_SIZE];
-
-	// 		Endpoint_ClearSETUP();
-
-	// 		/* Read the report data from the control endpoint */
-	// 		Endpoint_Read_Control_Stream_LE(&GenericData, sizeof(GenericData));
-	// 		Endpoint_ClearIN();
-
-	// 		ProcessGenericHIDReport(GenericData);
-	// 	}
-
-	// 	break;
-	// }
 }
 
 /** Event handler for the USB device Start Of Frame event. */
 void EVENT_USB_Device_StartOfFrame(void)
 {
 	// This event triggers once every millisecond. This allows us to implement polling intervals!
-	MSTillPoll--;
+	ms_till_poll--;
 }
 
-/** Function to process the last received report from the host.
- *
- *  \param[in] DataArray  Pointer to a buffer where the last received report has been stored
- */
-void ProcessGenericHIDReport(uint8_t DataArray[FIDO_REPORT_SIZE])
+void write_packet(ctap2hid_packet_t *data)
 {
-	/*
-		This is where you need to process reports sent from the host to the device. This
-		function is called each time the host has sent a new report. DataArray is an array
-		holding the report sent from the host.
-	*/
-
-	uint8_t NewLEDMask = LEDS_NO_LEDS;
-
-	if (DataArray[0])
-		NewLEDMask |= LEDS_LED1;
-
-	if (DataArray[1])
-		NewLEDMask |= LEDS_LED2;
-
-	if (DataArray[2])
-		NewLEDMask |= LEDS_LED3;
-
-	if (DataArray[3])
-		NewLEDMask |= LEDS_LED4;
-
-	LEDs_SetAllLEDs(NewLEDMask);
+	Endpoint_Write_Stream_LE(data, FIDO_REPORT_SIZE, NULL);
+	Endpoint_ClearIN();
 }
 
-/** Function to create the next report to send back to the host at the next reporting interval.
- *
- *  \param[out] DataArray  Pointer to a buffer where the next report data should be stored
- */
-void CreateGenericHIDReport(uint8_t DataArray[FIDO_REPORT_SIZE])
+void hid_write_message(ctap2hid_message_t *message)
 {
-	/*
-		This is where you need to create reports to be sent to the host from the device. This
-		function is called each time the host is ready to accept a new report. DataArray is
-		an array to hold the report to the host.
-	*/
+	uint8_t prev_endpoint = Endpoint_GetCurrentEndpoint();
 
-	for (uint8_t i = 0; i < 64; i++)
+	Endpoint_SelectEndpoint(FIDO_IN_EPADDR);
+
+	/* Check to see if the host is ready to accept another packet */
+	if (Endpoint_IsINReady())
 	{
-		DataArray[i] = i;
+		write_message(message, write_packet);
 	}
+
+	Endpoint_SelectEndpoint(prev_endpoint);
+}
+
+void handle_ping(ctap2hid_message_t *message)
+{
+	ctap2hid_message_t response = {
+		.channel_id = message->channel_id,
+		.command_id = CTAPHID_PING,
+		.payload_length = message->payload_length,
+		// This payload will be freed by read_message.
+		.payload = message->payload,
+	};
+
+	hid_write_message(&response);
+}
+
+uint32_t next_channel_id = 0;
+
+void handle_init(ctap2hid_message_t *message)
+{
+	uint64_t nonce = message->payload[0];
+
+	uint8_t payload[17];
+	payload[0] = nonce;
+	payload[8] = next_channel_id;
+	next_channel_id++;
+	payload[12] = CTAPHID_PROTOCOL_VERSION;
+	payload[13] = 0;
+	payload[14] = 0;
+	payload[15] = 1;
+	payload[16] = CTAPHID_CAPABILITIES;
+
+	ctap2hid_message_t response = {
+		.channel_id = message->channel_id,
+		.command_id = CTAPHID_INIT,
+		.payload_length = 17,
+		.payload = payload,
+	};
+}
+
+void handle_message(ctap2hid_message_t *message)
+{
+	switch (message->command_id)
+	{
+	case CTAPHID_PING:
+		handle_ping(message);
+		break;
+	case CTAPHID_INIT:
+		handle_init(message);
+		break;
+	}
+}
+
+ctap2hid_packet_t read_packet(void)
+{
+	ctap2hid_packet_t packet = {};
+	Endpoint_Read_Stream_LE(&packet, FIDO_REPORT_SIZE, NULL);
+	Endpoint_ClearOUT();
+	return packet;
+}
+
+bool err = true;
+
+void hid_read_message(void)
+{
+	uint8_t prev_endpoint = Endpoint_GetCurrentEndpoint();
+	Endpoint_SelectEndpoint(FIDO_OUT_EPADDR);
+
+	LEDs_SetAllLEDs(err ? LEDMASK_USB_ERROR : LEDMASK_USB_READY);
+
+	if (Endpoint_IsOUTReceived())
+	{
+		err = false;
+
+		read_message(read_packet, handle_message);
+	}
+
+	Endpoint_SelectEndpoint(prev_endpoint);
 }
 
 void HID_Task(void)
@@ -198,43 +225,5 @@ void HID_Task(void)
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 		return;
 
-	Endpoint_SelectEndpoint(FIDO_OUT_EPADDR);
-
-	/* Check to see if a packet has been sent from the host */
-	if (Endpoint_IsOUTReceived())
-	{
-		/* Check to see if the packet contains data */
-		if (Endpoint_IsReadWriteAllowed())
-		{
-			/* Create a temporary buffer to hold the read in report from the host */
-			uint8_t GenericData[FIDO_REPORT_SIZE];
-
-			/* Read Generic Report Data */
-			Endpoint_Read_Stream_LE(&GenericData, sizeof(GenericData), NULL);
-
-			/* Process Generic Report Data */
-			ProcessGenericHIDReport(GenericData);
-		}
-
-		/* Finalize the stream transfer to send the last packet */
-		Endpoint_ClearOUT();
-	}
-
-	Endpoint_SelectEndpoint(FIDO_IN_EPADDR);
-
-	/* Check to see if the host is ready to accept another packet */
-	if (Endpoint_IsINReady())
-	{
-		/* Create a temporary buffer to hold the report to send to the host */
-		uint8_t GenericData[FIDO_REPORT_SIZE];
-
-		/* Create Generic Report Data */
-		CreateGenericHIDReport(GenericData);
-
-		/* Write Generic Report Data */
-		Endpoint_Write_Stream_LE(&GenericData, sizeof(GenericData), NULL);
-
-		/* Finalize the stream transfer to send the last packet */
-		Endpoint_ClearIN();
-	}
+	hid_read_message();
 }
