@@ -41,18 +41,19 @@ void write_message(ctap2hid_message_t *message, writer_t write)
     }
 }
 
-bool read_message(reader_t read, handler_t handle)
+bool read_message(reader_t read, message_handler_t handle_message, error_handler_t handle_error)
 {
     ctap2hid_packet_t packet = read();
 
     if (!is_init_packet(packet))
     {
+        handle_error(&packet, CTAPHID_ERR_MSG_TIMEOUT);
         return false;
     }
 
     ctap2hid_message_t message = {
         .channel_id = packet.channel_id,
-        .command_id = packet.init.command_id,
+        .command_id = packet.init.command_id & 0x7f,
         .payload_length = SwapEndian_16(packet.init.payload_length),
     };
 
@@ -63,22 +64,27 @@ bool read_message(reader_t read, handler_t handle)
     memcpy(message.payload, packet.init.payload, size);
     position += size;
 
+    uint8_t seq = 0;
+
     while (position < message.payload_length)
     {
         packet = read();
 
-        if (!is_cont_packet(packet))
+        if (!is_cont_packet(packet) || seq != packet.cont.seq)
         {
             free(message.payload);
+            handle_error(&packet, CTAPHID_ERR_INVALID_SEQ);
             return false;
         }
 
         size = MIN(message.payload_length - position, CONT_PAYLOAD_LENGTH);
         memcpy(message.payload + position, packet.cont.payload, size);
         position += size;
+
+        seq++;
     }
 
-    handle(&message);
+    handle_message(&message);
 
     free(message.payload);
 

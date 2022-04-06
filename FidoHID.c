@@ -47,6 +47,16 @@ typedef struct
 
 int ms_till_poll = 5;
 
+void led_error(void)
+{
+	LEDs_SetAllLEDs(LEDMASK_USB_ERROR);
+}
+
+void led_ready(void)
+{
+	LEDs_SetAllLEDs(LEDMASK_USB_READY);
+}
+
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
@@ -136,6 +146,7 @@ void hid_write_message(ctap2hid_message_t *message)
 	/* Check to see if the host is ready to accept another packet */
 	if (Endpoint_IsINReady())
 	{
+		led_error();
 		write_message(message, write_packet);
 	}
 
@@ -162,8 +173,8 @@ void handle_init(ctap2hid_message_t *message)
 	uint64_t nonce = message->payload[0];
 
 	uint8_t payload[17];
-	payload[0] = nonce;
-	payload[8] = next_channel_id;
+	*(uint64_t *)(&payload[0]) = nonce;
+	*(uint32_t *)(&payload[8]) = next_channel_id;
 	next_channel_id++;
 	payload[12] = CTAPHID_PROTOCOL_VERSION;
 	payload[13] = 0;
@@ -177,6 +188,8 @@ void handle_init(ctap2hid_message_t *message)
 		.payload_length = 17,
 		.payload = payload,
 	};
+
+	hid_write_message(&response);
 }
 
 void handle_message(ctap2hid_message_t *message)
@@ -185,11 +198,20 @@ void handle_message(ctap2hid_message_t *message)
 	{
 	case CTAPHID_PING:
 		handle_ping(message);
-		break;
+		return;
 	case CTAPHID_INIT:
 		handle_init(message);
-		break;
+		return;
 	}
+
+	uint8_t payload[1] = {CTAPHID_ERR_INVALID_CMD};
+	ctap2hid_message_t response = {
+		.channel_id = message->channel_id,
+		.command_id = CTAPHID_ERROR,
+		.payload_length = 1,
+		.payload = payload,
+	};
+	hid_write_message(&response);
 }
 
 ctap2hid_packet_t read_packet(void)
@@ -200,20 +222,26 @@ ctap2hid_packet_t read_packet(void)
 	return packet;
 }
 
-bool err = true;
+void handle_error(ctap2hid_packet_t *packet, uint8_t err)
+{
+	uint8_t payload[1] = {err};
+	ctap2hid_message_t response = {
+		.channel_id = packet->channel_id,
+		.command_id = CTAPHID_ERROR,
+		.payload_length = 1,
+		.payload = payload,
+	};
+	hid_write_message(&response);
+}
 
 void hid_read_message(void)
 {
 	uint8_t prev_endpoint = Endpoint_GetCurrentEndpoint();
 	Endpoint_SelectEndpoint(FIDO_OUT_EPADDR);
 
-	LEDs_SetAllLEDs(err ? LEDMASK_USB_ERROR : LEDMASK_USB_READY);
-
 	if (Endpoint_IsOUTReceived())
 	{
-		err = false;
-
-		read_message(read_packet, handle_message);
+		read_message(read_packet, handle_message, handle_error);
 	}
 
 	Endpoint_SelectEndpoint(prev_endpoint);

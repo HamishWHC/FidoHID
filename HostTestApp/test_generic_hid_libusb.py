@@ -50,7 +50,7 @@ def send_report(device, nonce):
     data = list(range(64))
     # Report data for the demo is LED on/off data
     report_data = [0xff, 0xff, 0xff, 0xff,
-                   0x81, 0x00, 0x42, nonce] + data[:64-8] + [0xff, 0xff, 0xff, 0xff, 0x0, nonce] + data[64-8:]
+                   0x81, 0x00, 0x42, nonce] + data[:64-8]
 
     endpoint = usb.util.find_descriptor(
         device[0][(0, 0)],
@@ -66,8 +66,11 @@ def send_report(device, nonce):
 
 
 def receive_report(hid_device):
-    endpoint = hid_device[0][(0, 0)][0]
-    for _ in range(2):
+    endpoint = usb.util.find_descriptor(
+        hid_device[0][(0, 0)],
+        # match the first OUT endpoint
+        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN)
+    for _ in range(1):
         report_data = hid_device.read(
             endpoint.bEndpointAddress, endpoint.wMaxPacketSize)
         print(f"recevied: {list(report_data)}")
