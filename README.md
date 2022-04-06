@@ -107,13 +107,13 @@ CTAPHID has a number of features that it was designed with:
 - CTAPHID device discovery (again, see [HID](#hid) for how).
 - Fixed latency response and low protocol overhead.
 
-The CTAPHID specification defines transactions that consist of a request (either a authenticator API command, as explained above, or a CTAPHID command) and a response (the expected response or an error).
+The [CTAPHID specification defines transactions](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-protocol-and-framing) that consist of a request (either a authenticator API command, as explained above, or a CTAPHID command) and a response (the expected response or an error).
 
-These requests and responses are transmitted as single messages that, if necessary, are made up of packets. Packets are a fixed size, defined by the authenticator, but are limited to 64 bytes or less, due to the restrictions of HID.
+These requests and responses are transmitted as single messages that, if necessary, are transmitted in [packets](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-message-and-packet-structure). Packets are a fixed size, defined by the authenticator, but are limited to 64 bytes or less, due to the restrictions of HID.
 
 Every transaction must be completed before another can be initiated. A response cannot be sent unless a corresponding request was received (with the exception of keep alive messages, used by U2F/CTAP1).
 
-To achieve support for multiple applications operating concurrently, CTAPHID uses logical channels that are unique for each application. Whenever an application wants to request a transaction, it sends a 
+To achieve support for multiple applications using the same authenticator, [CTAPHID uses logical channels](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-channels) that are unique for each application. Whenever an application wants to begin using an authenticator, it sends an initialisation request that is responded to with a channel ID that should be used in subsequent requests.
 
 <!-- omit in toc -->
 #### HID
@@ -135,7 +135,7 @@ You might have wondered if I actually needed to outline how USB and HID work. We
 
 <!-- omit in toc -->
 #### Commands
-
+Now that we know how CTAPHID transmits messages, we can look at what those messages are. In addition to the [authenticator API](#authenticator-api), [CTAPHID defines some further commands](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-commands) related to interacting with USB authenticators, mostly relating to handling errors and manging communication at the CTAPHID layer.
 
 ## 4. Plan A: Building a Physical Authenticator
 CTAP commands, CTAPHID protocol.
