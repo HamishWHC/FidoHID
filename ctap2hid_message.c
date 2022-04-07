@@ -5,7 +5,7 @@ bool is_broadcast_message(ctap2hid_message_t message)
     return message.channel_id == 0xffffffff;
 }
 
-void write_message(ctap2hid_message_t *message, writer_t write)
+void write_message_packets(ctap2hid_message_t *message, writer_t write)
 {
     ctap2hid_packet_t packet = {
         .channel_id = message->channel_id,
@@ -41,52 +41,57 @@ void write_message(ctap2hid_message_t *message, writer_t write)
     }
 }
 
-bool read_message(reader_t read, message_handler_t handle_message, error_handler_t handle_error)
+uint8_t read_message_packets(ctap2hid_message_t *message, bool *err, packet_reader_t read, error_handler_t handle_error)
 {
-    ctap2hid_packet_t packet = read();
+    uint8_t n = 0;
 
-    if (!is_init_packet(packet))
+    ctap2hid_packet_t *packet = read(n);
+    if (!packet || !is_init_packet(packet))
     {
-        handle_error(&packet, CTAPHID_ERR_MSG_TIMEOUT);
-        return false;
+        *err = true;
+        return n;
     }
 
-    ctap2hid_message_t message = {
-        .channel_id = packet.channel_id,
-        .command_id = packet.init.command_id & 0x7f,
-        .payload_length = SwapEndian_16(packet.init.payload_length),
-    };
-
-    message.payload = malloc(message.payload_length);
+    message->channel_id = packet->channel_id;
+    message->command_id = packet->init.command_id & 0x7f;
+    message->payload_length = SwapEndian_16(packet->init.payload_length);
+    message->payload = malloc(message->payload_length);
 
     int position = 0;
-    int size = MIN(message.payload_length - position, INIT_PAYLOAD_LENGTH);
-    memcpy(message.payload, packet.init.payload, size);
+    int size = MIN(message->payload_length - position, INIT_PAYLOAD_LENGTH);
+    memcpy(message->payload, packet->init.payload, size);
     position += size;
 
-    uint8_t seq = 0;
+    n++;
 
-    while (position < message.payload_length)
+    while (position < message->payload_length)
     {
-        packet = read();
+        packet = read(n);
 
-        if (!is_cont_packet(packet) || seq != packet.cont.seq)
+        if (!packet)
         {
-            free(message.payload);
-            handle_error(&packet, CTAPHID_ERR_INVALID_SEQ);
-            return false;
+            free(message->payload);
+            return 0;
+        }
+        else if (!is_cont_packet(packet))
+        {
+            free(message->payload);
+            *err = true;
+            return n;
+        }
+        else if (n - 1 != packet->cont.seq)
+        {
+            handle_error(packet, CTAPHID_ERR_INVALID_SEQ);
+            *err = true;
+            return n;
         }
 
-        size = MIN(message.payload_length - position, CONT_PAYLOAD_LENGTH);
-        memcpy(message.payload + position, packet.cont.payload, size);
+        size = MIN(message->payload_length - position, CONT_PAYLOAD_LENGTH);
+        memcpy(message->payload + position, packet->cont.payload, size);
         position += size;
 
-        seq++;
+        n++;
     }
 
-    handle_message(&message);
-
-    free(message.payload);
-
-    return true;
+    return n;
 }

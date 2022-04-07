@@ -38,6 +38,7 @@
 #include "ctap2hid_packet.h"
 #include "ctap2hid_message.h"
 #include "ctaphid.h"
+#include "packet_queue.h"
 
 typedef struct
 {
@@ -57,6 +58,131 @@ void led_ready(void)
 	LEDs_SetAllLEDs(LEDMASK_USB_READY);
 }
 
+packet_queue_t in_queue;
+
+packet_queue_t out_queue;
+
+void write_packet(ctap2hid_packet_t *data)
+{
+	pq_push(&in_queue, *data);
+}
+
+void write_message(ctap2hid_message_t *message)
+{
+	write_message_packets(message, write_packet);
+}
+
+void handle_error(ctap2hid_packet_t *packet, uint8_t err)
+{
+	uint8_t payload[1] = {err};
+	ctap2hid_message_t response = {
+		.channel_id = packet->channel_id,
+		.command_id = CTAPHID_ERROR,
+		.payload_length = 1,
+		.payload = payload,
+	};
+	write_message(&response);
+}
+
+void handle_ping(ctap2hid_message_t *message)
+{
+	ctap2hid_message_t response = {
+		.channel_id = message->channel_id,
+		.command_id = CTAPHID_PING,
+		.payload_length = message->payload_length,
+		// This payload will be freed by read_message.
+		.payload = message->payload,
+	};
+
+	write_message(&response);
+}
+
+uint32_t next_channel_id = 1;
+
+void handle_init(ctap2hid_message_t *message)
+{
+	uint64_t nonce = *(uint64_t *)(&message->payload[0]);
+
+	uint8_t payload[17];
+	memset(payload, 0, 17);
+
+	// *((uint64_t *)(&payload[0])) = nonce;
+	for (int i = 0; i < 8; i++)
+	{
+		payload[i] = nonce >> (8 * i);
+	}
+
+	*((uint32_t *)(&payload[8])) = next_channel_id;
+	next_channel_id++;
+
+	payload[12] = CTAPHID_PROTOCOL_VERSION;
+	payload[13] = 0;
+	payload[14] = 0;
+	payload[15] = 1;
+	payload[16] = CTAPHID_CAPABILITIES;
+
+	ctap2hid_message_t response = {
+		.channel_id = message->channel_id,
+		.command_id = CTAPHID_INIT,
+		.payload_length = 17,
+		.payload = payload,
+	};
+
+	write_message(&response);
+}
+
+void handle_message(ctap2hid_message_t *message)
+{
+	LEDs_SetAllLEDs((LEDs_GetLEDs() + 1) & 0xf);
+
+	switch (message->command_id)
+	{
+	case CTAPHID_PING:
+		handle_ping(message);
+		return;
+	case CTAPHID_INIT:
+		handle_init(message);
+		return;
+	}
+
+	uint8_t payload[1] = {CTAPHID_ERR_INVALID_CMD};
+	ctap2hid_message_t response = {
+		.channel_id = message->channel_id,
+		.command_id = CTAPHID_ERROR,
+		.payload_length = 1,
+		.payload = payload,
+	};
+	write_message(&response);
+}
+
+ctap2hid_packet_t *read_packet(uint8_t n)
+{
+	return pq_peek_n(&out_queue, n);
+}
+
+bool process_messages(void)
+{
+	while (!pq_is_empty(&out_queue) && !is_init_packet(pq_peek(&out_queue)))
+	{
+		pq_pop(&out_queue);
+	}
+
+	if (pq_is_empty(&out_queue))
+		return false;
+
+	ctap2hid_message_t message = {};
+	bool err = false;
+	uint8_t packet_count = read_message_packets(&message, &err, read_packet, handle_error);
+	pq_pop_n(&out_queue, packet_count);
+
+	if (!err)
+	{
+		handle_message(&message);
+	}
+
+	return true;
+}
+
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
@@ -67,14 +193,18 @@ int main(void)
 	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 	GlobalInterruptEnable();
 
+	in_queue = pq_init();
+	out_queue = pq_init();
+
 	for (;;)
 	{
 		if (ms_till_poll == 0)
 		{
-			HID_Task();
+			hid_poll_task();
 			ms_till_poll = 5;
 		}
 		USB_USBTask();
+		process_messages();
 	}
 }
 
@@ -131,139 +261,33 @@ void EVENT_USB_Device_StartOfFrame(void)
 	ms_till_poll--;
 }
 
-void write_packet(ctap2hid_packet_t *data)
-{
-	// while (Endpoint_WaitUntilReady() == ENDPOINT_READYWAIT_Timeout)
-	// 	;
-
-	Endpoint_Write_Stream_LE(data, FIDO_REPORT_SIZE, NULL);
-	Endpoint_ClearIN();
-}
-
-void hid_write_message(ctap2hid_message_t *message)
-{
-	uint8_t prev_endpoint = Endpoint_GetCurrentEndpoint();
-
-	Endpoint_SelectEndpoint(FIDO_IN_EPADDR);
-
-	/* Check to see if the host is ready to accept another packet */
-	if (Endpoint_IsINReady() && Endpoint_IsReadWriteAllowed())
-	{
-		write_message(message, write_packet);
-		led_error();
-	}
-
-	Endpoint_SelectEndpoint(prev_endpoint);
-}
-
-void handle_ping(ctap2hid_message_t *message)
-{
-	ctap2hid_message_t response = {
-		.channel_id = message->channel_id,
-		.command_id = CTAPHID_PING,
-		.payload_length = message->payload_length,
-		// This payload will be freed by read_message.
-		.payload = message->payload,
-	};
-
-	hid_write_message(&response);
-}
-
-uint32_t next_channel_id = 1;
-
-void handle_init(ctap2hid_message_t *message)
-{
-	uint64_t nonce = message->payload[0];
-
-	uint8_t payload[17];
-	memset(payload, 0, 17);
-
-	// *((uint64_t *)(&payload[0])) = nonce;
-	for (int i = 0; i < 8; i++)
-	{
-		payload[i] = nonce >> (8 * i);
-	}
-
-	*((uint32_t *)(&payload[8])) = next_channel_id;
-	next_channel_id++;
-
-	payload[12] = CTAPHID_PROTOCOL_VERSION;
-	payload[13] = 0;
-	payload[14] = 0;
-	payload[15] = 1;
-	payload[16] = CTAPHID_CAPABILITIES;
-
-	ctap2hid_message_t response = {
-		.channel_id = message->channel_id,
-		.command_id = CTAPHID_INIT,
-		.payload_length = 17,
-		.payload = payload,
-	};
-
-	hid_write_message(&response);
-}
-
-void handle_message(ctap2hid_message_t *message)
-{
-	switch (message->command_id)
-	{
-	case CTAPHID_PING:
-		handle_ping(message);
-		return;
-	case CTAPHID_INIT:
-		handle_init(message);
-		return;
-	}
-
-	uint8_t payload[1] = {CTAPHID_ERR_INVALID_CMD};
-	ctap2hid_message_t response = {
-		.channel_id = message->channel_id,
-		.command_id = CTAPHID_ERROR,
-		.payload_length = 1,
-		.payload = payload,
-	};
-	hid_write_message(&response);
-}
-
-ctap2hid_packet_t read_packet(void)
-{
-	ctap2hid_packet_t packet = {};
-	Endpoint_Read_Stream_LE(&packet, FIDO_REPORT_SIZE, NULL);
-	Endpoint_ClearOUT();
-	return packet;
-}
-
-void handle_error(ctap2hid_packet_t *packet, uint8_t err)
-{
-	uint8_t payload[1] = {err};
-	ctap2hid_message_t response = {
-		.channel_id = packet->channel_id,
-		.command_id = CTAPHID_ERROR,
-		.payload_length = 1,
-		.payload = payload,
-	};
-	hid_write_message(&response);
-}
-
-void hid_read_message(void)
-{
-	uint8_t prev_endpoint = Endpoint_GetCurrentEndpoint();
-
-	Endpoint_SelectEndpoint(FIDO_OUT_EPADDR);
-
-	if (Endpoint_IsOUTReceived() && Endpoint_IsReadWriteAllowed())
-	{
-		read_message(read_packet, handle_message, handle_error);
-	}
-
-	Endpoint_SelectEndpoint(prev_endpoint);
-}
-
-void HID_Task(void)
+void hid_poll_task(void)
 {
 	/* Device must be connected and configured for the task to run */
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 		return;
 
-	hid_read_message();
+	Endpoint_SelectEndpoint(FIDO_IN_EPADDR);
+
+	if (!pq_is_empty(&in_queue) && Endpoint_IsINReady() && Endpoint_IsReadWriteAllowed())
+	{
+		ctap2hid_packet_t *packet = pq_peek(&in_queue);
+
+		Endpoint_Write_Stream_LE(packet, FIDO_REPORT_SIZE, NULL);
+		Endpoint_ClearIN();
+
+		pq_pop(&in_queue);
+	}
+
+	Endpoint_SelectEndpoint(FIDO_OUT_EPADDR);
+
+	if (!pq_is_full(&out_queue) && Endpoint_IsOUTReceived() && Endpoint_IsReadWriteAllowed())
+	{
+		ctap2hid_packet_t packet;
+
+		Endpoint_Read_Stream_LE(&packet, FIDO_REPORT_SIZE, NULL);
+		Endpoint_ClearOUT();
+
+		pq_push(&out_queue, packet);
+	}
 }

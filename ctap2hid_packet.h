@@ -25,7 +25,7 @@ typedef struct
     };
 } ctap2hid_packet_t;
 
-bool is_init_packet(ctap2hid_packet_t packet);
-bool is_cont_packet(ctap2hid_packet_t packet);
+bool is_init_packet(ctap2hid_packet_t *packet);
+bool is_cont_packet(ctap2hid_packet_t *packet);
 
 #endif

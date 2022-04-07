@@ -67,7 +67,7 @@
 
 /* Function Prototypes: */
 void SetupHardware(void);
-void HID_Task(void);
+void hid_poll_task(void);
 
 void EVENT_USB_Device_Connect(void);
 void EVENT_USB_Device_Disconnect(void);

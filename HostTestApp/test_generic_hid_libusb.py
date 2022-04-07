@@ -50,7 +50,7 @@ def send_report(device, nonce):
     data = list(range(64))
     # Report data for the demo is LED on/off data
     report_data = [0xff, 0xff, 0xff, 0xff,
-                   0x81, 0x00, 0x42, nonce] + data[:64-8]
+                   0x81, 0x00, 0x03, 12, 24, 36]
 
     endpoint = usb.util.find_descriptor(
         device[0][(0, 0)],
@@ -92,6 +92,8 @@ def main():
             receive_report(hid_device)
 
             p += 1
+
+            break
 
             sleep(.2)
     except KeyboardInterrupt:

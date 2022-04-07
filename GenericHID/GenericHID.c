@@ -1,9 +1,9 @@
 /*
-             LUFA Library
-     Copyright (C) Dean Camera, 2021.
+			 LUFA Library
+	 Copyright (C) Dean Camera, 2021.
 
   dean [at] fourwalledcubicle [dot] com
-           www.lufa-lib.org
+		   www.lufa-lib.org
 */
 
 /*
@@ -35,7 +35,6 @@
  */
 
 #include "GenericHID.h"
-
 
 /** Main program entry point. This routine configures the hardware required by the application, then
  *  enters a loop to run the application tasks in sequence.
@@ -123,35 +122,35 @@ void EVENT_USB_Device_ControlRequest(void)
 	/* Handle HID Class specific requests */
 	switch (USB_ControlRequest.bRequest)
 	{
-		case HID_REQ_GetReport:
-			if (USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_CLASS | REQREC_INTERFACE))
-			{
-				uint8_t GenericData[GENERIC_REPORT_SIZE];
-				CreateGenericHIDReport(GenericData);
+	case HID_REQ_GetReport:
+		if (USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_CLASS | REQREC_INTERFACE))
+		{
+			uint8_t GenericData[GENERIC_REPORT_SIZE];
+			CreateGenericHIDReport(GenericData);
 
-				Endpoint_ClearSETUP();
+			Endpoint_ClearSETUP();
 
-				/* Write the report data to the control endpoint */
-				Endpoint_Write_Control_Stream_LE(&GenericData, sizeof(GenericData));
-				Endpoint_ClearOUT();
-			}
+			/* Write the report data to the control endpoint */
+			Endpoint_Write_Control_Stream_LE(&GenericData, sizeof(GenericData));
+			Endpoint_ClearOUT();
+		}
 
-			break;
-		case HID_REQ_SetReport:
-			if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
-			{
-				uint8_t GenericData[GENERIC_REPORT_SIZE];
+		break;
+	case HID_REQ_SetReport:
+		if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
+		{
+			uint8_t GenericData[GENERIC_REPORT_SIZE];
 
-				Endpoint_ClearSETUP();
+			Endpoint_ClearSETUP();
 
-				/* Read the report data from the control endpoint */
-				Endpoint_Read_Control_Stream_LE(&GenericData, sizeof(GenericData));
-				Endpoint_ClearIN();
+			/* Read the report data from the control endpoint */
+			Endpoint_Read_Control_Stream_LE(&GenericData, sizeof(GenericData));
+			Endpoint_ClearIN();
 
-				ProcessGenericHIDReport(GenericData);
-			}
+			ProcessGenericHIDReport(GenericData);
+		}
 
-			break;
+		break;
 	}
 }
 
@@ -159,7 +158,7 @@ void EVENT_USB_Device_ControlRequest(void)
  *
  *  \param[in] DataArray  Pointer to a buffer where the last received report has been stored
  */
-void ProcessGenericHIDReport(uint8_t* DataArray)
+void ProcessGenericHIDReport(uint8_t *DataArray)
 {
 	/*
 		This is where you need to process reports sent from the host to the device. This
@@ -170,16 +169,16 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 	uint8_t NewLEDMask = LEDS_NO_LEDS;
 
 	if (DataArray[0])
-	  NewLEDMask |= LEDS_LED1;
+		NewLEDMask |= LEDS_LED1;
 
 	if (DataArray[1])
-	  NewLEDMask |= LEDS_LED2;
+		NewLEDMask |= LEDS_LED2;
 
 	if (DataArray[2])
-	  NewLEDMask |= LEDS_LED3;
+		NewLEDMask |= LEDS_LED3;
 
 	if (DataArray[3])
-	  NewLEDMask |= LEDS_LED4;
+		NewLEDMask |= LEDS_LED4;
 
 	LEDs_SetAllLEDs(NewLEDMask);
 }
@@ -188,7 +187,7 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
  *
  *  \param[out] DataArray  Pointer to a buffer where the next report data should be stored
  */
-void CreateGenericHIDReport(uint8_t* DataArray)
+void CreateGenericHIDReport(uint8_t *DataArray)
 {
 	/*
 		This is where you need to create reports to be sent to the host from the device. This
@@ -208,7 +207,7 @@ void HID_Task(void)
 {
 	/* Device must be connected and configured for the task to run */
 	if (USB_DeviceState != DEVICE_STATE_Configured)
-	  return;
+		return;
 
 	Endpoint_SelectEndpoint(GENERIC_OUT_EPADDR);
 
@@ -250,4 +249,3 @@ void HID_Task(void)
 		Endpoint_ClearIN();
 	}
 }
-
