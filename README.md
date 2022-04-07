@@ -14,8 +14,6 @@ Rather than submit my broken implementation (although it is available), I've wri
 ## 2. Table of Contents
 You can use this to skip to more interesting parts, such as the technical challenges I've mentioned above, or my reflections on the project and authenticators/authentication overall.
 
-**I've made the more important sections bold, please make sure to read them within the marking time.**
-
 - [1. Introduction](#1-introduction)
 - [2. Table of Contents](#2-table-of-contents)
 - [3. Understanding FIDO2 and CTAP](#3-understanding-fido2-and-ctap)
@@ -25,12 +23,12 @@ You can use this to skip to more interesting parts, such as the technical challe
 - [4. Plan A: Building a Physical Authenticator](#4-plan-a-building-a-physical-authenticator)
   - [4.1. Hardware](#41-hardware)
   - [4.2. Software](#42-software)
-  - [4.3. **Challenges of HID and USB**](#43-challenges-of-hid-and-usb)
+  - [4.3. Challenges of HID and USB](#43-challenges-of-hid-and-usb)
 - [5. Plan B: Simulating an Authenticator](#5-plan-b-simulating-an-authenticator)
   - [5.1. Why It Was Necessary](#51-why-it-was-necessary)
   - [5.2. Python-C Interface](#52-python-c-interface)
-  - [5.3. **Some Actual Cryptography**](#53-some-actual-cryptography)
-- [6. **Reflection**](#6-reflection)
+  - [5.3. Some Actual Cryptography](#53-some-actual-cryptography)
+- [6. Reflection](#6-reflection)
   - [6.1. On My Project](#61-on-my-project)
   - [6.2. On Authenticators and Authentication](#62-on-authenticators-and-authentication)
 - [7. Continuing This After 6841](#7-continuing-this-after-6841)
@@ -74,7 +72,7 @@ To summarise:
 ### 3.2. CTAP
 Now that we understand the basics, we can dive into the spec relevant to creating an authenticator: CTAP.
 
-At the time of writing, this specification can be found [here](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html)
+At the time of writing, this specification can be found [here](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html).
 
 There are three parts or layers to this protocol - the authenticator API, how messages are encoded, and how these messages are passed between the platform and authenticator.
 
@@ -156,14 +154,14 @@ Going through the process of writing the firmware for the Arduino - or more spec
 #### LUFA
 (and why C is better than ArduinoC)
 
-### 4.3. **Challenges of HID and USB**
+### 4.3. Challenges of HID and USB
 
 ## 5. Plan B: Simulating an Authenticator
 ### 5.1. Why It Was Necessary
 ### 5.2. Python-C Interface
-### 5.3. **Some Actual Cryptography**
+### 5.3. Some Actual Cryptography
 
-## 6. **Reflection**
+## 6. Reflection
 ### 6.1. On My Project
 ### 6.2. On Authenticators and Authentication
 ## 7. Continuing This After 6841

@@ -133,6 +133,9 @@ void EVENT_USB_Device_StartOfFrame(void)
 
 void write_packet(ctap2hid_packet_t *data)
 {
+	// while (Endpoint_WaitUntilReady() == ENDPOINT_READYWAIT_Timeout)
+	// 	;
+
 	Endpoint_Write_Stream_LE(data, FIDO_REPORT_SIZE, NULL);
 	Endpoint_ClearIN();
 }
@@ -144,10 +147,10 @@ void hid_write_message(ctap2hid_message_t *message)
 	Endpoint_SelectEndpoint(FIDO_IN_EPADDR);
 
 	/* Check to see if the host is ready to accept another packet */
-	if (Endpoint_IsINReady())
+	if (Endpoint_IsINReady() && Endpoint_IsReadWriteAllowed())
 	{
-		led_error();
 		write_message(message, write_packet);
+		led_error();
 	}
 
 	Endpoint_SelectEndpoint(prev_endpoint);
@@ -166,16 +169,24 @@ void handle_ping(ctap2hid_message_t *message)
 	hid_write_message(&response);
 }
 
-uint32_t next_channel_id = 0;
+uint32_t next_channel_id = 1;
 
 void handle_init(ctap2hid_message_t *message)
 {
 	uint64_t nonce = message->payload[0];
 
 	uint8_t payload[17];
-	*(uint64_t *)(&payload[0]) = nonce;
-	*(uint32_t *)(&payload[8]) = next_channel_id;
+	memset(payload, 0, 17);
+
+	// *((uint64_t *)(&payload[0])) = nonce;
+	for (int i = 0; i < 8; i++)
+	{
+		payload[i] = nonce >> (8 * i);
+	}
+
+	*((uint32_t *)(&payload[8])) = next_channel_id;
 	next_channel_id++;
+
 	payload[12] = CTAPHID_PROTOCOL_VERSION;
 	payload[13] = 0;
 	payload[14] = 0;
@@ -237,9 +248,10 @@ void handle_error(ctap2hid_packet_t *packet, uint8_t err)
 void hid_read_message(void)
 {
 	uint8_t prev_endpoint = Endpoint_GetCurrentEndpoint();
+
 	Endpoint_SelectEndpoint(FIDO_OUT_EPADDR);
 
-	if (Endpoint_IsOUTReceived())
+	if (Endpoint_IsOUTReceived() && Endpoint_IsReadWriteAllowed())
 	{
 		read_message(read_packet, handle_message, handle_error);
 	}
