@@ -9,7 +9,7 @@ These keys act as another authentication factor available to the user, and work 
 
 My original goal/minimum viable product was to implement a working USB authenticator, however my research and effort over the term slowly showed this was infeasible. Unfortunately, this realisation occurred rather late into the project, so I decided to make my goal easier to achieve rather than swap project entirely. My authenticator would need to be recognised by the computer and be able to complete the handshake/initialisation process so that the computer can learn about it. Even then, a key technical challenge was still too complex to overcome in time.
 
-Rather than submit my broken implementation (although it is available), I've written a Python program which allows the user to interact with my authenticator's firmware, running on the computer instead of an Arduino.
+I considered creating a Python interface to simulate the HID connection to the authenticator and allow for some level of demonstration, but the time I have left has made this was also too much to hope for. Instead, I've submitted my unreliable and incomplete CTAPHID implementation alongside this report.
 
 ## 2. Table of Contents
 You can use this to skip to more interesting parts, such as the technical challenges I've mentioned above, or my reflections on the project and authenticators/authentication overall.
@@ -20,18 +20,16 @@ You can use this to skip to more interesting parts, such as the technical challe
   - [3.1. FIDO2 Overview and Terminology](#31-fido2-overview-and-terminology)
   - [3.2. CTAP](#32-ctap)
   - [3.3. CTAPHID](#33-ctaphid)
-- [4. Plan A: Building a Physical Authenticator](#4-plan-a-building-a-physical-authenticator)
+- [4. Building an Authenticator](#4-building-an-authenticator)
   - [4.1. Hardware](#41-hardware)
-  - [4.2. Software](#42-software)
-  - [4.3. Challenges of HID and USB](#43-challenges-of-hid-and-usb)
-- [5. Plan B: Simulating an Authenticator](#5-plan-b-simulating-an-authenticator)
-  - [5.1. Why It Was Necessary](#51-why-it-was-necessary)
-  - [5.2. Python-C Interface](#52-python-c-interface)
-  - [5.3. Some Actual Cryptography](#53-some-actual-cryptography)
-- [6. Reflection](#6-reflection)
-  - [6.1. On My Project](#61-on-my-project)
-  - [6.2. On Authenticators and Authentication](#62-on-authenticators-and-authentication)
-- [7. Continuing This After 6841](#7-continuing-this-after-6841)
+  - [4.2. Software Libraries](#42-software-libraries)
+  - [4.3. Writing Application Code (and it's challenges)](#43-writing-application-code-and-its-challenges)
+    - [Low Level vs Class Drivers](#low-level-vs-class-drivers)
+  - [4.4. What I've Written](#44-what-ive-written)
+- [5. Reflection](#5-reflection)
+  - [5.1. On My Project](#51-on-my-project)
+  - [5.2. On Authenticators and Authentication](#52-on-authenticators-and-authentication)
+- [6. Continuing This After 6841](#6-continuing-this-after-6841)
 
 ## 3. Understanding FIDO2 and CTAP
 ### 3.1. FIDO2 Overview and Terminology
@@ -133,35 +131,104 @@ You might have wondered if I actually needed to outline how USB and HID work. We
 
 <!-- omit in toc -->
 #### Commands
-Now that we know how CTAPHID transmits messages, we can look at what those messages are. In addition to the [authenticator API](#authenticator-api), [CTAPHID defines some further commands](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-commands) related to interacting with USB authenticators, mostly relating to handling errors and manging communication at the CTAPHID layer.
+Now that we know how CTAPHID transmits messages, we can look at what those messages are. In addition to the [authenticator API](#authenticator-api), [CTAPHID defines some further commands](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-commands) related to interacting with USB authenticators, mostly relating to handling errors and manging communication at the CTAPHID layer, but also a 'wink' command that tells the authenticator to attract the user's attention, such as through a flashing light or a sound.
 
-## 4. Plan A: Building a Physical Authenticator
-CTAP commands, CTAPHID protocol.
+## 4. Building an Authenticator
+From the CTAP(HID) specification, we can see that an authenticator is simply a USB device that implements CTAPHID. So how do I build a USB device?
+
 ### 4.1. Hardware
-Leonardo because cheap + ready to go + supports what I need.
-### 4.2. Software
-Going through the process of writing the firmware for the Arduino - or more specifically the ATMEGA32U4.
+[Arduinos](https://arduino.cc) are ready to use microcontrollers attached to a PCB for power, general purpose IO pins, and other useful features. They're designed to be easy to get started with and are the goto microcontrollers for most beginner embedded system projects. They are also readily available rather than waiting a month for shipping from overseas.
+
+However, most Arduinos (e.g. the most common: the Arduino Uno) do not support regular USB communication, rather the onboard USB port only support serial and the chip programming interface. Instead, the [Arduino Leonardo](https://www.arduino.cc/en/main/arduinoBoardLeonardo) is the board that supports the creation of USB devices. It has 6 USB endpoints, and CTAPHID only requires 3 (IN, OUT and the control endpoint)! It was perfect for this project, and I went and picked up one from Jaycar.
+
+### 4.2. Software Libraries
+And now I had reached the bulk of the work. Now I had gone through the CTAPHID spec and I had realised how much work getting a full implementation would be. I decided to scale the project down to having an authenticator able to provide it's capabilities to the computer. Yubico (the creators of the popular Yubikey devices) provides a command line tool to interact with FIDO2 authenticators. This is (roughly) what I wanted my authenticator to be able to return when the command was run (this is the output returned by my own Yubikey, the comments after `//` are added by me):
+
+```
+❯ fido2-token -I ioreg://4295261606
+proto: 0x02 // CTAP version.
+major: 0x05 // Device version.
+minor: 0x04
+build: 0x03
+caps: 0x05 (wink, cbor, msg) // CTAPHID capabilties: supports WINK, CTAP2 commands and CTAP1 commands)
+version strings: U2F_V2, FIDO_2_0, FIDO_2_1_PRE // Compliant to FIDO2.0, FIDO2.1 and U2F V2 specs.
+extension strings: credProtect, hmac-secret // Supports these CTAP extensions.
+transport strings: nfc, usb // Supports NFC and USB communication.
+algorithms: es256 (public-key), eddsa (public-key) // Available algorithms.
+aaguid: 2fc0579f811347eab116bb5a8db9202a
+options: rk, up, noplat, clientPin, credentialMgmtPreview // Supports resident keys, user presence, setting a PIN and the preview credential management API. It is also not a platform authenticator.
+maxmsgsiz: 1200 // Maximum message size.
+maxcredcntlst: 8 // Credential limits.
+maxcredlen: 128
+fwversion: 0x50403
+pin protocols: 2, 1
+pin retries: 3
+uv retries: undefined // No user verification (e.g. biometrics).
+```
 
 <!-- omit in toc -->
 #### Arduino IDE and Libraries
-(and why I dislike them)
+While this would be a much more achievable goal, this still assumes that I can successfully implement HID communication on my Arduino. To get started with this, I looked at the Arduino USB libraries. PluggableUSB in particular. The issue was that the documentation and API for these was extremely limited, and didn't support what I need (at least, I thought so - looking at the API again now that I understand USB a lot more, it may have what I need, I'll have to investigate it another time).
 
-<!-- omit in toc -->
-#### The AVR Toolchain
-2.5KB isn't much to work with. Also avrdude and avr-gcc, etc.
+The Arduino IDE is also really bad - zero autocomplete and cryptic error messages. Also, since I was communicating over USB and the Arduino IDE needs to program over USB, the IDE struggled to upload my compiled code. There is a way around this but it wasn't consistent when used with the Arduino IDE.
+
+I tried using the Arduino extension in VS Code, but [the mess of preprocessing](https://arduino.github.io/arduino-cli/0.20/sketch-build-process/) that the Arduino toolchain uses got in the way.
 
 <!-- omit in toc -->
 #### LUFA
-(and why C is better than ArduinoC)
+Well if Arduino's standard library isn't going to work I'll have to take a look at my other options. One library in particular seems to be the go-to for USB on AVR microcontollers (the Arduino Leonardo has an ATMEGA32U4, which is an AVR microcontroller). This library is [LUFA (Lightweight USB Framework for AVRs)](http://www.fourwalledcubicle.com/LUFA.php), which provides low-level control of the chip's USB functionality. It also provides demos for various common use cases. However, it doesn't work within Arduino's ecosystem.
 
-### 4.3. Challenges of HID and USB
+<!-- omit in toc -->
+#### The AVR Toolchain
+Now that I'm working with plain C code, I need to compile and flash my code to the microcontroller, rather than rely on Arduino's version. To do this, I installed avr-gcc and avrdude, which is the AVR compiler from the AVR standard library implementation and a program to flash the code to the chip's program memory.
 
-## 5. Plan B: Simulating an Authenticator
-### 5.1. Why It Was Necessary
-### 5.2. Python-C Interface
-### 5.3. Some Actual Cryptography
+There's some particular Arduino Leonardo setup to be done, but thankfully [the author of LUFA provides a configuration for it](https://fourwalledcubicle.com/blog/2012/08/lufa-and-the-arduino-leonardo/).
 
-## 6. Reflection
-### 6.1. On My Project
-### 6.2. On Authenticators and Authentication
-## 7. Continuing This After 6841
+### 4.3. Writing Application Code (and it's challenges)
+Once I had LUFA's demos running, I began writing code to implement CTAPHID. Unfortunately, this was a lot harder than it sounds.
+
+#### Low Level vs Class Drivers
+Once I had LUFA's demos running, I began writing code to implement CTAPHID. Unfortunately, this was a lot harder than it seems. LUFA provides two different demos for each application - one that uses LUFA's higher level USB/HID class driver implementations (functions and callbacks to implement common uses quickly), and one that does the same but by implementing that functionality itself.
+
+Due to a 'technical limitation' ([that doesn't get mentioned anywhere except in a random forum post that gets moved to private emails...](https://www.avrfreaks.net/forum/lufa-hid-3-endpoints)), the LUFA class drivers for generic HID devices doesn't support having an OUT endpoint, which is required by the CTAPHID spec. I suppose I'll have to use the low level version - except I barely understand how USB works...
+
+<!-- omit in toc -->
+#### USB and HID
+I get started adapting the low level generic HID device demo to work for my CTAPHID device. Soon enough I have my Arduino showing up as "COMP6841 Something Awesome Project" in my computer's USB device list, and being detected as an authenticator by Yubico's CLI tool:
+```
+❯ fido2-token -L
+ioreg://4295262143: vendor=0x1050, product=0x0407 (Yubico YubiKey OTP+FIDO+CCID)
+ioreg://4295262114: vendor=0x2786, product=0x6837 (Hamish Cox COMP6841 Something Awesome Project)
+```
+
+But when I actually try to send and receive messages, I get extremely unhelpful errors from my host-side application (the demos provide Python scripts to send and receive data). I began debugging *everything* my code is doing - I dig into LUFA's internals, I dig into the USB spec, I look for debugging tools.
+
+At some point, a good 3 hours into this issue, in my 3rd check of the differences between the working demo and my code, I notice the endpoint addresses: I'm using 0x81 and 0x1, they use 0x81 and 0x2. The 0x8 part indicates direction. Sure enough, by changing an endpoint address, it begins to work as expected.
+
+But why had I changed it to begin with? Well, the CTAPHID spec is written for people who are familiar with USB and HID to begin with... [so the example endpoint addresses they provided, that I was using, were invalid](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#usb-descriptors).
+
+This was just one of my issues with USB communication, but definitely the most frustrating.
+
+<!-- omit in toc -->
+#### Memory
+Even getting past those issues (and they aren't solved - communication is frustratingly inconsistent), actually implementing the logic of a FIDO2 authenticator would be extremely difficult: the ATMEGA32U4 on the Arduino Leonardo has 2.5KB of RAM. Two point five. **Kilobytes**. Not sure how I'd be doing cryptography with that much, since I didn't get that far, but it should be possible, considering the size of Yubikeys ([like the Yubikey 5C Nano, which is absolutely tiny](https://www.yubico.com/au/product/yubikey-5c-nano/)).
+
+### 4.4. What I've Written
+So what have I actually written? You can find a GitHub repository with my code [**here**](https://github.com/HamishWHC/FidoHID).
+
+`FidoHID.c` contains `main` and USB communication related functions, including handlers for the CTAPHID commands that I did implement.
+
+`Descriptors.c` (and `.h`) contains definitions for the various USB descriptors, and a callback to handle responding to USB control requests for those descriptors.
+
+`ctap2hid_message.c` (and `.h`) contains the message struct and functions for reading and writing CTAPHID messages to/from packets.
+
+`ctap2hid_packet.c` (and `.h`) contains the packet struct and functions for checking packet properties.
+
+`packet_queue.c` (and `.h`) contains a queue implementation (without malloc, because 2.5KB of RAM) to queue up packets for processing (when read from the host) and writing (when they should be sent to the host).
+
+The `Config` directory holds some config `.h` files. `HostTestApp` contains a modified version of the demo's Python script for testing. `GenericHID` is the demo code I was working off of.
+
+## 5. Reflection
+### 5.1. On My Project
+### 5.2. On Authenticators and Authentication
+## 6. Continuing This After 6841
