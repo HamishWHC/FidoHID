@@ -24,7 +24,6 @@ You can use this to skip to more interesting parts, such as the technical challe
   - [4.1. Hardware](#41-hardware)
   - [4.2. Software Libraries](#42-software-libraries)
   - [4.3. Writing Application Code (and it's challenges)](#43-writing-application-code-and-its-challenges)
-    - [Low Level vs Class Drivers](#low-level-vs-class-drivers)
   - [4.4. What I've Written](#44-what-ive-written)
 - [5. Reflection](#5-reflection)
   - [5.1. On My Project](#51-on-my-project)
@@ -187,6 +186,7 @@ There's some particular Arduino Leonardo setup to be done, but thankfully [the a
 ### 4.3. Writing Application Code (and it's challenges)
 Once I had LUFA's demos running, I began writing code to implement CTAPHID. Unfortunately, this was a lot harder than it sounds.
 
+<!-- omit in toc -->
 #### Low Level vs Class Drivers
 Once I had LUFA's demos running, I began writing code to implement CTAPHID. Unfortunately, this was a lot harder than it seems. LUFA provides two different demos for each application - one that uses LUFA's higher level USB/HID class driver implementations (functions and callbacks to implement common uses quickly), and one that does the same but by implementing that functionality itself.
 
