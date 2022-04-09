@@ -25,9 +25,9 @@ You can use this to skip to more interesting parts, such as the technical challe
   - [4.2. Software Libraries](#42-software-libraries)
   - [4.3. Writing Application Code (and it's challenges)](#43-writing-application-code-and-its-challenges)
   - [4.4. What I've Written](#44-what-ive-written)
-- [5. Reflection](#5-reflection)
+- [5. Reflection and Analysis](#5-reflection-and-analysis)
   - [5.1. On My Project](#51-on-my-project)
-  - [5.2. On Authenticators and Authentication](#52-on-authenticators-and-authentication)
+  - [5.2. On Authenticators](#52-on-authenticators)
 - [6. Continuing This After 6841](#6-continuing-this-after-6841)
 - [7. Appendices](#7-appendices)
   - [7.1. Appendix A: GitHub Repository Link](#71-appendix-a-github-repository-link)
@@ -232,7 +232,7 @@ So what have I actually written? You can find a GitHub repository with my code [
 
 The `Config` directory holds some config `.h` files. `HostTestApp` contains a modified version of the demo's Python script for testing. `GenericHID` is the demo code I was working off of.
 
-## 5. Reflection
+## 5. Reflection and Analysis
 ### 5.1. On My Project
 My project had some major flaws in its' execution that prevented me from completing it to the standard I was hoping, but I also learnt a lot from the experience, including learning the technical aspects of FIDO2 and learning how I can more effectively manage my time and procrastination.
 
@@ -244,13 +244,27 @@ This would also have helped solve another flaw: procrastination. Since I enjoy s
 
 I also learnt a great deal about the authentication process by diving into the details of even a small section of the whole FIDO2 system. This has allowed me to understand the underlying technology in my personal FIDO2 devices, and know which authentication challenges it solves and doesn't solve.
 
-### 5.2. On Authenticators and Authentication
-I want to preface this section with: I can't be sure of many of my conclusions in this section due to my simple understanding of HID and USB, so parts of it may be inaccurate, but rather than get hung up on that, I'm analysing based on my current understanding.
+### 5.2. On Authenticators
+I want to preface this section with:
+- I can't be sure of many of my conclusions in this section due to my simple understanding of HID and USB, so parts of this may be inaccurate, but rather than get hung up on that, I'm analysing based on my current understanding.
+- I can't really analyse the parts of FIDO2 I didn't focus on. In particular, I unfortunately don't know enough about the cryptographic side of FIDO2 to analyse it. Instead I'll be focusing on the transport layer and the issues with the authenticator's communication with the host platform.
 
+An important thing to note about HID devices is that they are generally available to every process on the system. It's hardly a security risk to read data from a joystick or a barcode scanner (actually maybe this could be, but you get the point). Any process can generally read and write to any USB (or in this case, HID) device. And so we could just listen to the communication between the authenticator and the PC.
 
+If listening to the output the authenticator is sending to other processes isn't doable, then why not make our own connection to it? Initialise enough channels and you can probably figure out some already configured channel ID and begin sending requests that rely on that channel's state. This could be mitigated by generating channel IDs using a cryptographic random number generator. But doing this on a 2.5KB RAM chip wouldn't be great for performance.
+
+Of course, do you really need access to another channel? If you can communicate with the authenticator, you can just create your own channel and start asking this user to verify things. Suppose you send a request for logging in to a server, and it responds with the FIDO2 details it expects to your process. Time or fake the prompts well enough and you could possibly get verification for this service when the user thinks they are verifying for another.
+
+Even then, what if we can just deny the user service by sending a ton of requests and tanking it's performance? Or send 10 invalid PINs, which locks the authenticator and requires the user to reset it?
+
+Bottom line is that any access to authenticators is bad news. But any protection for HID devices (such as for keyboards, to prevent really easy keylogging) is OS specific and not defined by the FIDO2 specifications. In fact, on my Macbook, I can interact with my Yubikey just fine with an open source command line program (written by Yubico, in fact) that doesn't even require root!
+
+So I now know that my authenticator really *mustn't* be plugged into untrusted computers, [contrary to Yubico's advice](https://support.yubico.com/hc/en-us/articles/360013659740-Can-I-Use-the-YubiKey-on-Untrusted-Computers-).
 
 ## 6. Continuing This After 6841
-After I've finished this project and have some time, I would certainly like to come back to this code and sort out the technical issues, and hopefully get a working authenticator. I really need some time away from it though, since this last week of trying (and failing) to get something working has really stressed me out.
+After I've finished this project and have some time, I would certainly like to come back to this code and sort out the technical issues, and hopefully get a working authenticator. I also would like to try creating some of the attacks I mentioned in my analysis of authenticators.
+
+I really need some time away from this project though, since this last week of trying (and failing) to get something working has really stressed me out.
 
 ## 7. Appendices
 ### 7.1. Appendix A: GitHub Repository Link
