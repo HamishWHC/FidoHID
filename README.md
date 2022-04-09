@@ -29,6 +29,10 @@ You can use this to skip to more interesting parts, such as the technical challe
   - [5.1. On My Project](#51-on-my-project)
   - [5.2. On Authenticators and Authentication](#52-on-authenticators-and-authentication)
 - [6. Continuing This After 6841](#6-continuing-this-after-6841)
+- [7. Appendices](#7-appendices)
+  - [7.1. Appendix A: GitHub Repository Link](#71-appendix-a-github-repository-link)
+  - [7.2. Appexdix B: CTAP Specfication Link](#72-appexdix-b-ctap-specfication-link)
+  - [7.3. Appexdix C: Blog Post Links](#73-appexdix-c-blog-post-links)
 
 ## 3. Understanding FIDO2 and CTAP
 ### 3.1. FIDO2 Overview and Terminology
@@ -230,5 +234,34 @@ The `Config` directory holds some config `.h` files. `HostTestApp` contains a mo
 
 ## 5. Reflection
 ### 5.1. On My Project
+My project had some major flaws in its' execution that prevented me from completing it to the standard I was hoping, but I also learnt a lot from the experience, including learning the technical aspects of FIDO2 and learning how I can more effectively manage my time and procrastination.
+
+Unfortunately, the 30+ hours spent on this project are mostly in the form of writing and debugging code, which is hard to convert to time spent after the fact - since I didn't realise how much my implementation issues would impact my project, I didn't spend the effort I should have documenting them (issue, time spent, fix, etc.).
+
+Another key flaw in my project's execution was leaving the technical aspect to the later half. I spent the first half doing more basic research which limited my ability to tell how large a project this was. If I had determined more quickly what I needed to be doing, I could have begun encountering and solving my technical issues sooner.
+
+This would also have helped solve another flaw: procrastination. Since I enjoy solving technical problems, this would have been a more effective strategy to ensure I was more on top of this project. I know I prefer technical work, but I haven't worked on many self-guided/directed projects that are a combination of technical skills and writing, so hadn't considered how I could effectively make myself get started. This is an important lesson for me that I can apply to later projects.
+
+I also learnt a great deal about the authentication process by diving into the details of even a small section of the whole FIDO2 system. This has allowed me to understand the underlying technology in my personal FIDO2 devices, and know which authentication challenges it solves and doesn't solve.
+
 ### 5.2. On Authenticators and Authentication
+I want to preface this section with: I can't be sure of many of my conclusions in this section due to my simple understanding of HID and USB, so parts of it may be inaccurate, but rather than get hung up on that, I'm analysing based on my current understanding.
+
+
+
 ## 6. Continuing This After 6841
+After I've finished this project and have some time, I would certainly like to come back to this code and sort out the technical issues, and hopefully get a working authenticator. I really need some time away from it though, since this last week of trying (and failing) to get something working has really stressed me out.
+
+## 7. Appendices
+### 7.1. Appendix A: GitHub Repository Link
+My code (and this report in markdown format) can be found here: https://github.com/HamishWHC/FidoHID
+
+### 7.2. Appexdix B: CTAP Specfication Link
+This is the version of the CTAP spec that was accurate at the time of writing, and the one I followed: 
+https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html
+
+### 7.3. Appexdix C: Blog Post Links
+I had very few, sorry, but they can be found here:
+
+- My initial brainstorming post (and setting insane endgoals): https://www.openlearning.com/u/hamishcox/blog/W1SomethingAwesomeTopicBrainstorming/
+- An info dump after I begun the technical side and realised how much work it was: https://www.openlearning.com/u/hamishcox/blog/W6SomethingAwesomeInfoDump/
