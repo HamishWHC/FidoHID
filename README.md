@@ -14,6 +14,8 @@ I considered creating a Python interface to simulate the HID connection to the a
 ## 2. Table of Contents
 You can use this to skip to more interesting parts, such as the technical challenges I've mentioned above, or my reflections on the project and authenticators/authentication overall.
 
+**Please make sure to read sections 4 and 5. Section 3 is a demonstration of my technical learning and you may find it interesting or useful as background knowledge, but in terms of marking sections 4 and 5 are more important.**
+
 - [1. Introduction](#1-introduction)
 - [2. Table of Contents](#2-table-of-contents)
 - [3. Understanding FIDO2 and CTAP](#3-understanding-fido2-and-ctap)
